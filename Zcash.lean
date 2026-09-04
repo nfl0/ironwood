@@ -14,6 +14,7 @@
 -- reachable from some default target.
 
 import Zcash.Common
+import Zcash.Coppice
 import Zcash.Circuits
 import Zcash.Circuits.Integration
 import Zcash.Security

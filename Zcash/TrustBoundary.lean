@@ -1,5 +1,6 @@
 import Zcash.Circuits.Action.RealBases
 import Zcash.Circuits.Action.Separation
+import Zcash.Coppice.Names.Proofs
 import Zcash.Security.Ledger.Bridge
 import Zcash.Security.Ledger.SinsemillaDLR
 import Zcash.Security.Ledger.ActionBundleBridge
@@ -143,6 +144,30 @@ fixture censuses separately permit Ironwood-owned closed checks of captured data
 provenance, and the keygen/deployment seam. Each `+native(...)` list names precisely which
 certificates its entry rests on.
 -/
+
+/-! ## Coppice Names reducer model
+
+Application-level state-machine properties under authenticated-input and
+proof-verdict assumptions. These entries make the model's kernel trust base a
+build-checked fact; they do not extend the Ironwood circuit-soundness claim. -/
+
+assert_axioms Zcash.Coppice.Names.step_deterministic
+assert_axioms Zcash.Coppice.Names.first_canonical_valid_unique
+assert_axioms Zcash.Coppice.Names.first_canonical_valid_accepts_head
+assert_axioms Zcash.Coppice.Names.first_canonical_valid_skips_rejected
+assert_axioms Zcash.Coppice.Names.lifecycle_terminal_boundary
+assert_axioms Zcash.Coppice.Names.lifecycle_last_cooldown_block
+assert_axioms Zcash.Coppice.Names.lifecycle_first_claimable_block
+assert_axioms Zcash.Coppice.Names.compact_policy_first_missing_block
+assert_axioms Zcash.Coppice.Names.stale_lineage_rejected
+assert_axioms Zcash.Coppice.Names.same_epoch_refresh_rejected
+assert_axioms Zcash.Coppice.Names.spent_current_head_becomes_terminal
+assert_axioms Zcash.Coppice.Names.rejected_bulletin_does_not_hide_spend
+assert_axioms Zcash.Coppice.Names.accepted_replacement_survives_old_spend
+assert_axioms Zcash.Coppice.Names.rollback_apply_equivalence
+assert_axioms Zcash.Coppice.Names.rollback_reapply_equivalence
+assert_axioms Zcash.Coppice.Names.filter_exact_preserves_transaction
+assert_axioms Zcash.Coppice.Names.full_exact_replay_equivalence
 
 /-! ## Common oracle layer
 
