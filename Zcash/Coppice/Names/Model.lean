@@ -10,16 +10,10 @@ structure Parameters where
   cooldownBlocks : Nat
   deriving DecidableEq, Repr
 
-inductive RetentionPolicy where
-  | retainClaimable
-  | compactClaimable
-  deriving DecidableEq, Repr
-
 inductive Lifecycle where
   | missing
   | active
   | cooldown
-  | claimable
   deriving DecidableEq, Repr
 
 structure StateRef where
@@ -45,15 +39,17 @@ structure State where
 def Head.terminalAt (head : Head) : Height :=
   head.terminalHeight.getD head.expiryHeight
 
-/-!
-The current undeployed v2 semantics use `retainClaimable`. The
-`compactClaimable` parameter is the refinement seam for PR-04: it changes only
-the representation at the claimable boundary, not the active or cooldown
-predicates.
--/
+def claimable (parameters : Parameters) (height : Height) (head : Head) : Bool :=
+  head.terminalAt + parameters.cooldownBlocks ≤ height
 
-def lifecycle (parameters : Parameters) (policy : RetentionPolicy)
-    (height : Height) (head : Option Head) : Lifecycle :=
+def compactHead (parameters : Parameters) (height : Height) : Option Head → Option Head
+  | none => none
+  | some head => if claimable parameters height head then none else some head
+
+def normalizeAtBlockStart (parameters : Parameters) (height : Height) (state : State) : State :=
+  { head := compactHead parameters height state.head }
+
+def lifecycle (parameters : Parameters) (height : Height) (head : Option Head) : Lifecycle :=
   match head with
   | none => .missing
   | some current =>
@@ -63,13 +59,10 @@ def lifecycle (parameters : Parameters) (policy : RetentionPolicy)
       else if height < terminal + parameters.cooldownBlocks then
         .cooldown
       else
-        match policy with
-        | .retainClaimable => .claimable
-        | .compactClaimable => .missing
+        .missing
 
-def resolvedUa (parameters : Parameters) (policy : RetentionPolicy)
-    (height : Height) (state : State) : Option Ua :=
-  match lifecycle parameters policy height state.head, state.head with
+def resolvedUa (parameters : Parameters) (height : Height) (state : State) : Option Ua :=
+  match lifecycle parameters height state.head, state.head with
   | .active, some head => some head.ua
   | _, _ => none
 
@@ -131,9 +124,9 @@ def revealEligible (parameters : Parameters) (target : Name) (height : Height)
   candidate.commitUnexpired &&
   candidate.actionExists &&
   candidate.proofValid &&
-  match lifecycle parameters .retainClaimable height state.head with
-  | .missing | .claimable => true
-  | .active | .cooldown => false
+  match (normalizeAtBlockStart parameters height state).head with
+  | none => true
+  | some _ => false
 
 def refreshEligible (parameters : Parameters) (target : Name) (height : Height)
     (state : State) (transaction : Transaction) (candidate : Refresh) : Bool :=
@@ -145,7 +138,7 @@ def refreshEligible (parameters : Parameters) (target : Name) (height : Height)
   match state.head with
   | none => false
   | some current =>
-      lifecycle parameters .retainClaimable height state.head == .active &&
+      lifecycle parameters height state.head == .active &&
       candidate.predecessor == current.producer &&
       decide (current.producerEpoch < candidate.inclusionEpoch) &&
       transaction.actionNullifiers.contains current.futureNullifier
@@ -202,9 +195,10 @@ def terminateIfStillCurrent (height : Height) (old : Option Head)
 
 def applyTransaction (parameters : Parameters) (target : Name) (height : Height)
     (state : State) (transaction : Transaction) : State :=
-  let spent := state.head.any (spendsHead transaction.actionNullifiers)
-  let afterOperation := applyOperation parameters target height state transaction
-  terminateIfStillCurrent height state.head afterOperation spent
+  let normalized := normalizeAtBlockStart parameters height state
+  let spent := normalized.head.any (spendsHead transaction.actionNullifiers)
+  let afterOperation := applyOperation parameters target height normalized transaction
+  terminateIfStillCurrent height normalized.head afterOperation spent
 
 inductive Step (parameters : Parameters) (target : Name) (height : Height) :
     State → Transaction → State → Prop where
